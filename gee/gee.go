@@ -9,7 +9,7 @@ type HandlerFunc func(ctx *Context)
 
 // Engine implement the interface of ServeHTTP
 type Engine struct {
-	route *route
+	route *router
 }
 
 // New is the constructor of gee.Engine
