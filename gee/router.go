@@ -51,6 +51,7 @@ func (r *router) addRoute(method string, pattern string, handlerFunc HandlerFunc
 	r.handlers[key] = handlerFunc
 }
 
+//match node to path and parse the parameter from the path
 func (r *router) getRoute(method string, path string) (*node, map[string]string) {
 	searchParts := parsePattern(path)
 	params := make(map[string]string)
@@ -60,7 +61,9 @@ func (r *router) getRoute(method string, path string) (*node, map[string]string)
 		return nil, nil
 	}
 
+	//match node to handler
 	n := root.search(searchParts, 0)
+	//parse the parameter from request path
 	if n != nil {
 		parts := parsePattern(n.pattern)
 		for index, part := range parts {
@@ -80,11 +83,15 @@ func (r *router) getRoute(method string, path string) (*node, map[string]string)
 
 func (r *router) handler(ctx *Context) {
 	route, params := r.getRoute(ctx.Method, ctx.Path)
+
 	if route != nil {
 		ctx.Params = params
 		key := ctx.Method + "-" + route.pattern
-		r.handlers[key](ctx)
+		ctx.handlers = append(ctx.handlers, r.handlers[key])
 	} else {
-		ctx.String(http.StatusNotFound, "404 NOT FOUND: %s\n", ctx.Path)
+		ctx.handlers = append(ctx.handlers, func(ctx *Context) {
+			ctx.String(http.StatusNotFound, "404 NOT FOUND %s\n", ctx.Path)
+		})
 	}
+	ctx.Next()
 }

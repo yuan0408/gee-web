@@ -20,6 +20,10 @@ type Context struct {
 
 	//	response info
 	StatusCode int
+
+	// middleware
+	handlers []HandlerFunc
+	index    int
 }
 
 func newContext(req *http.Request, w http.ResponseWriter) *Context {
@@ -28,6 +32,15 @@ func newContext(req *http.Request, w http.ResponseWriter) *Context {
 		Writer: w,
 		Path:   req.URL.Path,
 		Method: req.Method,
+		index:  -1,
+	}
+}
+
+func (c *Context) Next() {
+	c.index++
+	s := len(c.handlers)
+	for ; c.index < s; c.index++ {
+		c.handlers[c.index](c)
 	}
 }
 
@@ -81,7 +94,13 @@ func (c *Context) HTML(code int, html string) {
 	c.Writer.Write([]byte(html))
 }
 
+// Param get parameter from request path
 func (c *Context) Param(key string) string {
 	value := c.Params[key]
 	return value
+}
+
+func (c *Context) Fail(code int, err string) {
+	c.index = len(c.handlers)
+	c.JSON(code, H{"message": err})
 }

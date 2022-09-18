@@ -2,6 +2,7 @@ package gee
 
 import (
 	"net/http"
+	"strings"
 )
 
 // HandlerFunc defines the request handler used by gee
@@ -55,12 +56,23 @@ func (group *RouterGroup) POST(pattern string, handlerFunc HandlerFunc) {
 	group.addRoute("POST", pattern, handlerFunc)
 }
 
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middlewares...)
+}
+
 // Run defines the method to start a http server
 func (e *Engine) Run(addr string) error {
 	return http.ListenAndServe(addr, e)
 }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range e.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
 	ctx := newContext(req, w)
+	ctx.handlers = middlewares
 	e.router.handler(ctx)
 }
