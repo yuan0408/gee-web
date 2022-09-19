@@ -1,7 +1,9 @@
 package gee
 
 import (
+	"html/template"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -18,8 +20,10 @@ type RouterGroup struct {
 // Engine implement the interface of ServeHTTP
 type Engine struct {
 	*RouterGroup
-	router *router
-	groups []*RouterGroup //store all group
+	router        *router
+	groups        []*RouterGroup     //store all group
+	htmlTemplates *template.Template // for html render
+	funcMap       template.FuncMap   // for html render
 }
 
 // New is the constructor of gee.Engine
@@ -60,6 +64,29 @@ func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middlewares = append(group.middlewares, middlewares...)
 }
 
+// create static handler
+func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(group.prefix, relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(ctx *Context) {
+		file := ctx.Param("filepath")
+		// check if file exists and/or if we have permission to access it
+		if _, err := fs.Open(file); err != nil {
+			ctx.Status(http.StatusNotFound)
+			return
+		}
+
+		fileServer.ServeHTTP(ctx.Writer, ctx.Req)
+	}
+}
+
+// Static serve static file
+func (group *RouterGroup) Static(relativePath string, root string) {
+	handler := group.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	group.GET(urlPattern, handler)
+}
+
 // Run defines the method to start a http server
 func (e *Engine) Run(addr string) error {
 	return http.ListenAndServe(addr, e)
@@ -74,5 +101,14 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	ctx := newContext(req, w)
 	ctx.handlers = middlewares
+	ctx.engine = e
 	e.router.handler(ctx)
+}
+
+func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
+	e.funcMap = funcMap
+}
+
+func (e *Engine) LoadHTMLGlob(pattern string) {
+	e.htmlTemplates = template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
 }
